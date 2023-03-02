@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "te"
-version = "0.1.0"
+name = "platypus-lang"
+version = "0.0.1"
