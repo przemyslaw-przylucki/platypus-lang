@@ -1,4 +1,6 @@
+use crate::exception::Exception;
 use crate::literal_value::LiteralValue;
+use crate::literal_value::LiteralValue::{FloatValue, StringValue};
 use crate::token::Token;
 use crate::token_type::TokenType;
 
@@ -105,7 +107,7 @@ impl Scanner {
             },
             '/' => {
                 if self.char_match('/') {
-                    while self.peak() == '\n' || !self.is_at_end() {
+                    while self.peek() == '\n' || !self.is_at_end() {
                         self.advance();
                     }
 
@@ -119,7 +121,18 @@ impl Scanner {
                 self.line += 1;
                 Ok(())
             },
-            _ => return Err(format!("Unrecognizable token at line {}", self.line)),
+            '"' => {
+                self.string();
+                Ok(())
+            }
+            c => {
+                if is_digit(c) {
+                    self.number();
+                    return Ok(())
+                } else {}
+
+                return Err(format!("Unrecognizable token at line {}", self.line));
+            },
         };
     }
 
@@ -139,15 +152,10 @@ impl Scanner {
         token_type: TokenType,
         literal: Option<LiteralValue>,
     ) -> Result<(), String> {
-        let mut text = "".to_string();
-        let bytes = self.source.as_bytes();
-        for i in self.start..self.current {
-            text.push(bytes[i] as char);
-        }
 
         self.tokens.push(Token {
             token_type,
-            lexeme: text,
+            lexeme: self.current_text(),
             literal,
             line_number: self.line,
         });
@@ -159,12 +167,12 @@ impl Scanner {
         self.current >= self.source.len()
     }
 
-    fn peak(self: &Self) -> char {
+    fn peek(self: &Self) -> char {
         if self.is_at_end() {
             return '\0';
         }
 
-        self.source.as_bytes()[self.current] as char
+        return self.source.chars().nth(self.current).unwrap();
     }
 
     fn char_match(self: &mut Self, char: char) -> bool {
@@ -172,13 +180,72 @@ impl Scanner {
             return false;
         }
 
-        if self.peak() != char {
+        if self.peek() != char {
             return false;
         }
 
         self.current += 1;
         return true;
     }
+
+    fn number(self: &mut Self) -> Result<(), String> {
+        while is_digit(self.peek()) {
+            self.advance();
+        }
+
+        if self.peek() == '.' && is_digit(self.peek_next()) {
+            self.advance();
+
+            while is_digit(self.peek()) {
+                self.advance();
+            }
+        }
+
+        let value = self.current_text().parse::<f64>().unwrap();
+        self.add_token_literal(TokenType::Number, Some(FloatValue(value)));
+
+        return Ok(());
+    }
+
+    fn peek_next(&self) -> char {
+        if self.current + 1 >= self.source.len() {
+            return '\n';
+        }
+
+        return self.source.chars().nth(self.current + 1).unwrap();
+    }
+
+    fn current_text(&self) -> String {
+        return self.text(self.start, self.current);
+    }
+
+    fn text(&self, start: usize, end: usize) -> String {
+        return String::from(&self.source[start..end]);
+    }
+
+    fn string(&mut self) -> Result<(), String> {
+        while self.peek() != '"' && ! self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            return Exception::throw( "Unterminated string".to_string(), self.line);
+        }
+
+        self.advance();
+
+        let value = self.text(self.start + 1, self.current - 1);
+        self.add_token_literal(TokenType::String, Some(StringValue(value)));
+
+        return Ok(());
+    }
+}
+
+fn is_digit(ch: char) -> bool {
+    return (ch as u8) >= ('0' as u8) && (ch as u8) <= ('9' as u8);
 }
 
 #[cfg(test)]
@@ -186,7 +253,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn handle_one_char_tokens() {
+    fn handles_one_char_tokens() {
         let source = "{(( ))}";
         let mut scanner = Scanner::new(source);
         scanner.scan_tokens();
@@ -203,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn handle_operators() {
+    fn handles_operators() {
         let source = "! != == >=";
         let mut scanner = Scanner::new(source);
         scanner.scan_tokens();
@@ -214,5 +281,54 @@ mod tests {
         assert_eq!(scanner.tokens[2].token_type, TokenType::EqualEqual);
         assert_eq!(scanner.tokens[3].token_type, TokenType::GreaterEqual);
         assert_eq!(scanner.tokens[4].token_type, TokenType::Eof);
+    }
+
+    #[test]
+    fn handles_number_literals() {
+        let source = "420 69 420.69";
+        let mut scanner = Scanner::new(source);
+        scanner.scan_tokens();
+
+        assert_eq!(scanner.tokens.len(), 4);
+
+
+        assert_eq!(scanner.tokens[0].token_type, TokenType::Number);
+        // assert_eq!(scanner.tokens[0].literal, LiteralValue::FloatValue);
+        assert_eq!(scanner.tokens[1].token_type, TokenType::Number);
+        // assert_eq!(scanner.tokens[1].literal, LiteralValue::FloatValue);
+        assert_eq!(scanner.tokens[2].token_type, TokenType::Number);
+        // assert_eq!(scanner.tokens[2].literal, LiteralValue::FloatValue);
+
+        assert_eq!(scanner.tokens[3].token_type, TokenType::Eof);
+    }
+
+    #[test]
+    fn handles_string_literals() {
+        let source = r#""platypus""#;
+        let mut scanner = Scanner::new(source);
+        scanner.scan_tokens();
+
+        assert_eq!(scanner.tokens.len(), 2);
+
+        assert_eq!(scanner.tokens[0].token_type, TokenType::String);
+
+        match scanner.tokens[0].literal.as_ref().unwrap() {
+            StringValue(val) => assert_eq!(val, "platypus"),
+            _ => panic!("Incorrect literal"),
+        }
+
+        assert_eq!(scanner.tokens[1].token_type, TokenType::Eof);
+    }
+
+    #[test]
+    fn handles_string_literals_unterminated() {
+        let source = r#""platypus"#;
+        let mut scanner = Scanner::new(source);
+        let result = scanner.scan_tokens();
+
+        match result {
+            Err(_) => (),
+            _ => panic!("Test didn't fail but it should"),
+        }
     }
 }

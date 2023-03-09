@@ -1,9 +1,9 @@
-struct Exception {
+pub struct Exception {
 
 }
 
 impl Exception {
-    pub fn throw(self: Self, message: String, line: i32) {
-        println!("Error: {}", message)
+    pub fn throw(message: String, line: usize) -> Result<(), String> {
+        return Err(format!("Error at line {}: {}", line, message))
     }
 }
