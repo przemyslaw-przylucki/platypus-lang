@@ -137,14 +137,14 @@ impl Scanner {
             },
             '/' => {
                 if self.char_match('/') {
-                    while self.peek() == '\n' || !self.is_at_end() {
-                        self.advance();
-                    }
-
-                    return Ok(())
-                } else {
-                    self.add_token(TokenType::Slash)
+                    return self.single_line_comment();
                 }
+
+                if self.char_match('*') {
+                    return self.multi_line_comment();
+                }
+
+                return self.add_token(TokenType::Slash)
             },
             ' ' | '\r' | '\t' => Ok(()),
             '\n' => {
@@ -252,6 +252,28 @@ impl Scanner {
 
     fn text(&self, start: usize, end: usize) -> String {
         return String::from(&self.source[start..end]);
+    }
+
+    fn single_line_comment(&mut self) -> Result<(), String> {
+        while ! self.char_match('\n') {
+            self.advance();
+        }
+
+        return Ok(());
+    }
+
+    fn multi_line_comment(&mut self) -> Result<(), String> {
+        while self.peek() != '*' && self.peek_next() != '/' {
+            self.advance();
+        }
+
+        // Advance twice to skip the next two tokens.
+        // TODO: create a function advance that can accept an integer of "hops"
+
+        self.advance();
+        self.advance();
+
+        return Ok(());
     }
 
     fn string(&mut self) -> Result<(), String> {
@@ -445,5 +467,63 @@ mod tests {
         assert_eq!(scanner.tokens[12].token_type, TokenType::Semicolon);
         assert_eq!(scanner.tokens[13].token_type, TokenType::RightBrace);
         assert_eq!(scanner.tokens[14].token_type, TokenType::Eof);
+    }
+
+    #[test]
+    fn handles_single_line_comments() {
+        let source = "\n
+        let foo = 5;\n
+        // This is a comment \n
+        let bar = 6;\n
+        ";
+
+        let mut scanner = Scanner::new(source);
+        scanner.scan_tokens().unwrap();
+
+        scanner.debug();
+
+        assert_eq!(scanner.tokens[0].token_type, TokenType::Let);
+        assert_eq!(scanner.tokens[1].token_type, TokenType::Identifier);
+        assert_eq!(scanner.tokens[2].token_type, TokenType::Equal);
+        assert_eq!(scanner.tokens[3].token_type, TokenType::Number);
+        assert_eq!(scanner.tokens[4].token_type, TokenType::Semicolon);
+        assert_eq!(scanner.tokens[5].token_type, TokenType::Let);
+        assert_eq!(scanner.tokens[6].token_type, TokenType::Identifier);
+        assert_eq!(scanner.tokens[7].token_type, TokenType::Equal);
+        assert_eq!(scanner.tokens[8].token_type, TokenType::Number);
+        assert_eq!(scanner.tokens[9].token_type, TokenType::Semicolon);
+        assert_eq!(scanner.tokens[10].token_type, TokenType::Eof);
+    }
+
+    #[test]
+    fn handles_multi_line_comments() {
+        let source = "\
+        let foo = 5;
+        /*
+
+        This is a multi line comment\n
+
+        let xd = \"asdasd\";\n
+
+        this is a random comment
+
+        */
+        let bar = 6;
+        ";
+
+        let mut scanner = Scanner::new(source);
+        scanner.scan_tokens().unwrap();
+
+        assert_eq!(scanner.tokens[0].token_type, TokenType::Let);
+        assert_eq!(scanner.tokens[1].token_type, TokenType::Identifier);
+        assert_eq!(scanner.tokens[2].token_type, TokenType::Equal);
+        assert_eq!(scanner.tokens[3].token_type, TokenType::Number);
+        assert_eq!(scanner.tokens[4].token_type, TokenType::Semicolon);
+        assert_eq!(scanner.tokens[5].token_type, TokenType::Let);
+        assert_eq!(scanner.tokens[6].token_type, TokenType::Identifier);
+        assert_eq!(scanner.tokens[7].token_type, TokenType::Equal);
+        assert_eq!(scanner.tokens[8].token_type, TokenType::Number);
+        assert_eq!(scanner.tokens[9].token_type, TokenType::Semicolon);
+        assert_eq!(scanner.tokens[10].token_type, TokenType::Eof);
     }
 }
