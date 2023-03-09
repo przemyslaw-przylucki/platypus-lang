@@ -8,7 +8,7 @@ use crate::token_type::TokenType;
 
 pub struct Scanner {
     source: String,
-    tokens: Vec<Token>,
+    pub tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: usize,
@@ -324,6 +324,7 @@ fn is_alpha_numeric(ch: char) -> bool {
     return is_digit(ch) || is_alpha(ch);
 }
 
+// TODO: There's probably a better way to do it
 #[cfg(test)]
 #[path = "test_scanner.rs"]
 mod test_scanner;

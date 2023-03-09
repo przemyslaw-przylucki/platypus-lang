@@ -3,6 +3,7 @@ mod exception;
 mod token;
 mod literal_value;
 mod token_type;
+mod expr;
 
 use crate::scanner::*;
 
