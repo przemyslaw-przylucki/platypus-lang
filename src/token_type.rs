@@ -1,4 +1,4 @@
-
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     LeftParen,
@@ -33,7 +33,7 @@ pub enum TokenType {
     Class,
     Else,
     False,
-    Fun,
+    Fn,
     For,
     If,
     Null,

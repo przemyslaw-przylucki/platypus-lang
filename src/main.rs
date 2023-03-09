@@ -4,7 +4,6 @@ mod token;
 mod literal_value;
 mod token_type;
 
-use crate::exception::*;
 use crate::scanner::*;
 
 use std::{env, fs, io};

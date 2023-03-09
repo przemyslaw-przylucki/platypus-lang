@@ -1,6 +1,7 @@
 use crate::literal_value::LiteralValue;
 use crate::token_type::TokenType;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Token {
     pub(crate) token_type: TokenType,
@@ -9,6 +10,7 @@ pub struct Token {
     pub(crate) line_number: usize,
 }
 
+#[allow(dead_code)]
 impl Token {
     pub fn new(token_type: TokenType, lexeme: String, literal: Option<LiteralValue>, line_number: usize) -> Self {
         Self {

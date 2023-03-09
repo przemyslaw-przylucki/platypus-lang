@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::iter::Iterator;
 use crate::exception::Exception;
 use crate::literal_value::LiteralValue;
 use crate::literal_value::LiteralValue::{FloatValue, StringValue};
@@ -10,6 +12,7 @@ pub struct Scanner {
     start: usize,
     current: usize,
     line: usize,
+    keywords: HashMap<&'static str, TokenType>
 }
 
 impl Scanner {
@@ -20,6 +23,33 @@ impl Scanner {
             start: 0,
             current: 0,
             line: 1,
+            keywords: HashMap::from([
+                ("and", TokenType::And),
+                ("&&", TokenType::And),
+                ("or", TokenType::Or),
+                ("||", TokenType::Or),
+                ("true", TokenType::True),
+                ("false", TokenType::False),
+                ("null", TokenType::Null),
+                ("if", TokenType::If),
+                ("else", TokenType::Else),
+                ("return", TokenType::Return),
+                ("print", TokenType::Print),
+                ("while", TokenType::While),
+                ("for", TokenType::For),
+                ("let", TokenType::Let),
+                ("this", TokenType::This),
+                ("extends", TokenType::Extends),
+                ("fn", TokenType::Fn),
+                ("class", TokenType::Class),
+            ])
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn debug(&mut self) {
+        for token in &self.tokens {
+            println!("{}", token.to_string());
         }
     }
 
@@ -122,14 +152,16 @@ impl Scanner {
                 Ok(())
             },
             '"' => {
-                self.string();
-                Ok(())
-            }
+                return self.string();
+            },
             c => {
                 if is_digit(c) {
-                    self.number();
-                    return Ok(())
-                } else {}
+                    return self.number();
+                }
+
+                if is_alpha(c) {
+                    return self.identifier();
+                }
 
                 return Err(format!("Unrecognizable token at line {}", self.line));
             },
@@ -202,9 +234,8 @@ impl Scanner {
         }
 
         let value = self.current_text().parse::<f64>().unwrap();
-        self.add_token_literal(TokenType::Number, Some(FloatValue(value)));
 
-        return Ok(());
+        return self.add_token_literal(TokenType::Number, Some(FloatValue(value)));
     }
 
     fn peek_next(&self) -> char {
@@ -238,14 +269,37 @@ impl Scanner {
         self.advance();
 
         let value = self.text(self.start + 1, self.current - 1);
-        self.add_token_literal(TokenType::String, Some(StringValue(value)));
-
-        return Ok(());
+        return self.add_token_literal(TokenType::String, Some(StringValue(value)));
     }
+
+    fn identifier(&mut self) -> Result<(), String> {
+        while is_alpha_numeric(self.peek()) {
+            self.advance();
+        }
+
+        let substring = &self.source[self.start..self.current];
+        if self.keywords.contains_key(substring) {
+            return self.add_token(self.keywords.get(substring).unwrap().clone())
+        }
+
+        return self.add_token(TokenType::Identifier);
+    }
+}
+
+fn is_alpha(ch: char) -> bool {
+    let uch = ch as u8;
+
+    return (uch >= 'a' as u8 && uch <= 'z' as u8)
+        || (uch >= 'A' as u8 && uch <= 'Z' as u8)
+        || ch == '_';
 }
 
 fn is_digit(ch: char) -> bool {
     return (ch as u8) >= ('0' as u8) && (ch as u8) <= ('9' as u8);
+}
+
+fn is_alpha_numeric(ch: char) -> bool {
+    return is_digit(ch) || is_alpha(ch);
 }
 
 #[cfg(test)]
@@ -256,7 +310,7 @@ mod tests {
     fn handles_one_char_tokens() {
         let source = "{(( ))}";
         let mut scanner = Scanner::new(source);
-        scanner.scan_tokens();
+        scanner.scan_tokens().unwrap();
 
         assert_eq!(scanner.tokens.len(), 7);
         println!("{:?}", scanner.tokens);
@@ -273,7 +327,7 @@ mod tests {
     fn handles_operators() {
         let source = "! != == >=";
         let mut scanner = Scanner::new(source);
-        scanner.scan_tokens();
+        scanner.scan_tokens().unwrap();
 
         assert_eq!(scanner.tokens.len(), 5);
         assert_eq!(scanner.tokens[0].token_type, TokenType::Bang);
@@ -287,7 +341,7 @@ mod tests {
     fn handles_number_literals() {
         let source = "420 69 420.69";
         let mut scanner = Scanner::new(source);
-        scanner.scan_tokens();
+        scanner.scan_tokens().unwrap();
 
         assert_eq!(scanner.tokens.len(), 4);
 
@@ -306,7 +360,7 @@ mod tests {
     fn handles_string_literals() {
         let source = r#""platypus""#;
         let mut scanner = Scanner::new(source);
-        scanner.scan_tokens();
+        scanner.scan_tokens().unwrap();
 
         assert_eq!(scanner.tokens.len(), 2);
 
@@ -314,6 +368,23 @@ mod tests {
 
         match scanner.tokens[0].literal.as_ref().unwrap() {
             StringValue(val) => assert_eq!(val, "platypus"),
+            _ => panic!("Incorrect literal"),
+        }
+
+        assert_eq!(scanner.tokens[1].token_type, TokenType::Eof);
+    }
+    #[test]
+    fn handles_string_multiline() {
+        let source = "\"platypus\n is \n awesome\"";
+        let mut scanner = Scanner::new(source);
+        scanner.scan_tokens().unwrap();
+
+        assert_eq!(scanner.tokens.len(), 2);
+
+        assert_eq!(scanner.tokens[0].token_type, TokenType::String);
+
+        match scanner.tokens[0].literal.as_ref().unwrap() {
+            StringValue(val) => assert_eq!(val, "platypus\n is \n awesome"),
             _ => panic!("Incorrect literal"),
         }
 
@@ -330,5 +401,49 @@ mod tests {
             Err(_) => (),
             _ => panic!("Test didn't fail but it should"),
         }
+    }
+
+    #[test]
+    fn handles_identifiers() {
+        let source = "foo_asd = \"bar\";";
+        let mut scanner = Scanner::new(source);
+        scanner.scan_tokens().unwrap();
+
+        assert_eq!(scanner.tokens[0].token_type, TokenType::Identifier);
+        assert_eq!(scanner.tokens[1].token_type, TokenType::Equal);
+        assert_eq!(scanner.tokens[2].token_type, TokenType::String);
+        assert_eq!(scanner.tokens[3].token_type, TokenType::Semicolon);
+        assert_eq!(scanner.tokens[4].token_type, TokenType::Eof);
+
+        assert_eq!(scanner.tokens.len(), 5);
+    }
+
+    #[test]
+    fn handles_keywords() {
+        let source = "\
+        let foo = 5;\
+        while foo == 5 {\
+            print \"haha\";\
+        }\
+        ";
+
+        let mut scanner = Scanner::new(source);
+        scanner.scan_tokens().unwrap();
+
+        assert_eq!(scanner.tokens[0].token_type, TokenType::Let);
+        assert_eq!(scanner.tokens[1].token_type, TokenType::Identifier);
+        assert_eq!(scanner.tokens[2].token_type, TokenType::Equal);
+        assert_eq!(scanner.tokens[3].token_type, TokenType::Number);
+        assert_eq!(scanner.tokens[4].token_type, TokenType::Semicolon);
+        assert_eq!(scanner.tokens[5].token_type, TokenType::While);
+        assert_eq!(scanner.tokens[6].token_type, TokenType::Identifier);
+        assert_eq!(scanner.tokens[7].token_type, TokenType::EqualEqual);
+        assert_eq!(scanner.tokens[8].token_type, TokenType::Number);
+        assert_eq!(scanner.tokens[9].token_type, TokenType::LeftBrace);
+        assert_eq!(scanner.tokens[10].token_type, TokenType::Print);
+        assert_eq!(scanner.tokens[11].token_type, TokenType::String);
+        assert_eq!(scanner.tokens[12].token_type, TokenType::Semicolon);
+        assert_eq!(scanner.tokens[13].token_type, TokenType::RightBrace);
+        assert_eq!(scanner.tokens[14].token_type, TokenType::Eof);
     }
 }
