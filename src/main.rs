@@ -4,12 +4,14 @@ mod token;
 mod literal_value;
 mod token_type;
 mod expr;
+mod parser;
 
 use crate::scanner::*;
 
 use std::{env, fs, io};
 use std::io::{stdout, Write};
 use std::process::exit;
+use crate::parser::Parser;
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
@@ -60,10 +62,9 @@ fn run_file(path: &str) -> Result<(), String> {
 fn run(input: &str) -> Result<(), String> {
     let mut scanner = Scanner::new(input);
     let tokens = scanner.scan_tokens()?;
+    let mut parser = Parser::new(tokens);
 
-    for token in tokens {
-        println!("{:?}", token);
-    }
+    parser.parse().unwrap().print();
 
     return Ok(());
 }

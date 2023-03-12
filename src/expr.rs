@@ -1,4 +1,6 @@
+use crate::literal_value::LiteralValue;
 use crate::token::Token;
+use crate::token_type::TokenType;
 
 pub enum ExpressionLiteralValue {
     Number(f32),
@@ -17,6 +19,32 @@ impl ExpressionLiteralValue {
             ExpressionLiteralValue::False => String::from("false"),
             ExpressionLiteralValue::Null => String::from("null"),
         }
+    }
+
+    pub fn from_token(token: Token) -> ExpressionLiteralValue {
+        return match token.token_type {
+            TokenType::Number => Self::Number(unwrap_as_f32(token.literal)),
+            TokenType::String => Self::StringValue(unwrap_as_string(token.literal)),
+            TokenType::False => Self::False,
+            TokenType::True => Self::True,
+            TokenType::Null => Self::Null,
+            _ => panic!("Could not create ExpressionLiteralValue from {:?}", token)
+        }
+    }
+}
+
+fn unwrap_as_string(literal: Option<LiteralValue>) -> String {
+    match literal.unwrap() {
+        LiteralValue::StringValue(s) | LiteralValue::IdentifierValue(s) => s.clone(),
+        _ => panic!("Could not unwrap as string"),
+    }
+}
+
+fn unwrap_as_f32(literal: Option<LiteralValue>) -> f32 {
+    match literal.unwrap() {
+        LiteralValue::FloatValue(x) => x as f32,
+        LiteralValue::IntegerValue(x) => x as f32,
+        _ => panic!("Could not unwrap as f32"),
     }
 }
 
@@ -45,7 +73,7 @@ impl Expr {
     pub fn to_string(&self) -> String {
         return match self {
             Expr::Binary { left, operator, right } => {
-                format!("{} {} {}", left.to_string(), operator.lexeme, right.to_string())
+                format!("({} {} {})", operator.lexeme, left.to_string(), right.to_string())
             },
             Expr::Grouping { expression } => {
                 format!("(group {})", expression.to_string())
@@ -103,6 +131,6 @@ mod tests {
             right: group,
         };
 
-        assert_eq!(ast.to_string(), "(- 123) * (group 420.69)".to_string());
+        assert_eq!(ast.to_string(), "(* (- 123) (group 420.69))".to_string());
     }
 }

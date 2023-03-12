@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum LiteralValue {
-    NumberValue(i64),
+    IntegerValue(i64),
     FloatValue(f64),
     StringValue(String),
     IdentifierValue(String),
